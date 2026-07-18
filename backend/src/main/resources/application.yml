@@ -1,28 +1,67 @@
 spring:
   application:
     name: datasentry
+  # Datasource – values injected via env vars; see .env.example
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/datasentry}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASS:postgres}
+    username: ${DB_USER:datasentry}
+    password: ${DB_PASS:change_me_locally}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 20000
   jpa:
     hibernate:
+      # NEVER use update/create; Flyway owns the schema
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+        jdbc:
+          time_zone: UTC
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
 
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# Actuator – expose ONLY health, info, metrics (never env, heapdump, shutdown)
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+      base-path: /actuator
   endpoint:
     health:
+      # Kubernetes probe-ready groups
       probes:
         enabled: true
       show-details: always
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: DataSentry
+    version: 0.1.0
+    description: Data-quality operations platform
+
+logging:
+  level:
+    root: INFO
+    dev.datasentry: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
