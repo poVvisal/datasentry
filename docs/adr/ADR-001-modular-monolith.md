@@ -1,49 +1,33 @@
-# ADR-001: Modular Monolith
+# ADR-001: Modular Monolith Architecture
 
-- **Status:** Accepted
-- **Date:** 2026-07-18
+**Date:** 2026-07-18  
+**Status:** Accepted
 
 ## Decision
+DataSentry is built as a modular monolith — a single deployable JAR organized
+into feature-based packages (`datasets/`, future `validations/`) with explicit
+layer boundaries enforced by convention.
 
-DataSentry will start as a **modular monolith**: one repository, one shared codebase, one Spring Boot backend module today, and a future separate worker process built from the same repository later.
+The API server and future background worker share one Maven module and Git
+repository but will be launched as separate JVM processes once the worker is
+introduced on Day 4.
 
-## Context
+## Why Not Microservices
 
-The Day 1 goal is a seven-day build that proves the core backend foundation: PostgreSQL persistence, Flyway migrations, health checks, structured errors, and one clean vertical slice for dataset metadata.
+| Factor | Modular Monolith | Microservices |
+|--------|-----------------|---------------|
+| Local dev startup | `./mvnw spring-boot:run` | Docker Compose + discovery overhead |
+| Refactor cost | IDE-safe, single codebase | Cross-service contract changes |
+| Domain confidence | Low on Day 1 | Must be proven before extraction |
+| Operational overhead | One process | Discovery, tracing, distributed config |
+| Team size | 1 developer | Unjustified |
 
-The platform will eventually support:
-- CSV uploads
-- validation profile management
-- asynchronous validation runs
-- quality reporting
-- a future API process and worker process
-
-Those future capabilities do not justify microservices on Day 1.
-
-## Why this decision
-
-A modular monolith gives us:
-- **Fast delivery:** fewer moving parts, less deployment and local-dev friction.
-- **Clear boundaries:** feature-based packages (`datasets`, `shared`, later `validation`, `runs`, `reports`) keep the design modular without distributed-system overhead.
-- **Future flexibility:** the same repository can later produce two deployables, API and worker, when asynchronous processing arrives.
-- **Lower cost:** local-first, open-source development with PostgreSQL only. No early infra tax.
-- **Simpler transactions:** dataset metadata and future validation orchestration can evolve with strong consistency inside one codebase.
-
-## Why microservices are rejected for this seven-day build
-
-Microservices are intentionally rejected because they would add:
-- service discovery, networking, and versioning concerns
-- distributed observability requirements
-- cross-service contract management
-- container/orchestration overhead
-- higher local development complexity
-- slower iteration for a team still proving domain boundaries
-
-Those costs do not buy meaningful value for the Day 1 scope.
+Microservices are explicitly rejected for this seven-day build because the
+boundaries are not yet proven. Extracting too early creates wrong seams that
+are expensive to fix across service contracts. A modular monolith can be split
+later with confidence once the domain is stable.
 
 ## Consequences
-
-- The codebase must preserve clear module boundaries even though it is one deployable today.
-- Feature packages own their controller, service, repository, DTOs, and domain model.
-- Shared cross-cutting concerns stay in `shared/` only when they are truly reusable.
-- When background processing is introduced, the worker can be extracted into a separate runnable process from the same repository without forcing a rewrite.
+- Feature packages must not import each other's internal types directly.
+- The worker will be a separate Spring Boot `main` class in the same repo.
+- This decision is revisited after Day 7 when the domain is proven.
